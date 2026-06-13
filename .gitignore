@@ -27,3 +27,6 @@ Thumbs.db
 .vscode/
 .idea/
 *.sublime-*
+
+# APK 文件（放在 Release 里）
+static/*.apk

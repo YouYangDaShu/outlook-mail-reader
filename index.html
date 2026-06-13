@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Outlook 取件</title>
+<style>
+:root{--bg:#000;--g:rgba(255,255,255,.07);--gb:rgba(255,255,255,.1);--ga:rgba(255,255,255,.03);--t:#f5f5f7;--t2:rgba(255,255,255,.55);--t3:rgba(255,255,255,.3);--a:#0a84ff;--ah:#409cff;--gr:#30d158;--re:#ff453a;--r:16px;--rs:12px}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,'SF Pro Display','PingFang SC',sans-serif;background:var(--bg);color:var(--t);min-height:100vh;overflow-x:hidden}
+body::before{content:'';position:fixed;top:-40%;left:-20%;width:80%;height:80%;background:radial-gradient(circle,rgba(10,132,255,.12)0%,transparent 70%);pointer-events:none;z-index:0}
+body::after{content:'';position:fixed;bottom:-30%;right:-20%;width:70%;height:70%;background:radial-gradient(circle,rgba(48,209,88,.08)0%,transparent 70%);pointer-events:none;z-index:0}
+.wrap{max-width:800px;margin:0 auto;padding:16px;position:relative;z-index:1}
+
+.topbar{display:flex;align-items:center;gap:12px;padding:16px 0 20px}
+.topbar h1{font-size:22px;font-weight:700;flex:1;background:linear-gradient(135deg,#fff,rgba(255,255,255,.6));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.topbar .badge{background:rgba(10,132,255,.15);color:var(--a);padding:4px 12px;border-radius:20px;font-size:13px;font-weight:500}
+
+.glass{background:var(--g);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid var(--gb);border-radius:var(--r);box-shadow:0 8px 32px rgba(0,0,0,.3)}
+
+.btn{padding:10px 20px;border:none;border-radius:var(--rs);font-size:14px;font-weight:500;cursor:pointer;transition:all .2s;display:inline-flex;align-items:center;gap:6px;-webkit-tap-highlight-color:transparent}
+.btn:active{transform:scale(.96)}
+.btn-a{background:var(--a);color:#fff}.btn-a:hover{background:var(--ah)}
+.btn-g{background:var(--gr);color:#000;font-weight:600}.btn-g:hover{background:#3de06a}
+.btn-r{background:var(--re);color:#fff}.btn-r:hover{background:#ff6961}
+.btn-ghost{background:rgba(255,255,255,.06);color:var(--t2);border:1px solid var(--gb)}.btn-ghost:hover{background:rgba(255,255,255,.1);color:#fff}
+.btn-sm{padding:6px 14px;font-size:12px}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+
+input,textarea,select{background:rgba(255,255,255,.06);border:1px solid var(--gb);color:var(--t);padding:10px 14px;border-radius:var(--rs);font-size:14px;width:100%;font-family:inherit;transition:border-color .2s}
+input:focus,textarea:focus{outline:none;border-color:var(--a);box-shadow:0 0 0 3px rgba(10,132,255,.15)}
+textarea{font-family:'SF Mono','Menlo',monospace;font-size:12px;resize:vertical}
+
+.page{display:none}.page.active{display:block}
+
+.search-bar{margin-bottom:12px}
+.search-bar input{padding-left:36px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='rgba(255,255,255,.3)' viewBox='0 0 16 16'%3E%3Cpath d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85zm-5.44.856a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:12px center}
+
+.acc-item{display:flex;align-items:center;gap:10px;padding:14px 16px;margin-bottom:6px;transition:background .2s;border:1px solid transparent}
+.acc-item:hover{background:rgba(255,255,255,.04);border-color:var(--gb)}
+.acc-item .email{flex:1;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.acc-item .dot{width:6px;height:6px;border-radius:50%;background:var(--t3);flex-shrink:0}
+
+.acc-group-header{display:flex;align-items:center;gap:10px;padding:12px 16px;cursor:pointer;user-select:none}
+.acc-group-header:hover{background:rgba(255,255,255,.04)}
+.group-arrow{font-size:10px;color:var(--t3);width:16px;text-align:center}
+.group-name{font-size:14px;font-weight:600;color:var(--t);flex:1}
+
+.mail-topbar{display:flex;align-items:center;gap:10px;padding:12px 0 16px;flex-wrap:wrap}
+.mail-topbar .account-name{font-size:15px;font-weight:600;color:var(--a);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mail-search{display:flex;gap:6px;flex:1;min-width:200px}
+.mail-search input{flex:1}
+
+.mail-item{padding:12px 16px;border-left:2px solid rgba(255,255,255,.06);margin-bottom:2px;cursor:pointer;transition:background .15s;border-radius:0 var(--rs) var(--rs) 0}
+.mail-item:hover{background:rgba(255,255,255,.04)}
+.mail-item.unread{border-left-color:var(--a)}
+.mail-subject{font-size:14px;font-weight:500}
+.mail-meta{display:flex;gap:10px;margin-top:4px;align-items:baseline}
+.mail-from{color:var(--t2);font-size:12px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mail-time{color:var(--t3);font-size:11px;flex-shrink:0}
+.mail-preview{color:var(--t3);font-size:12px;margin-top:6px;line-height:1.5}
+
+.detail-back{display:flex;align-items:center;gap:8px;padding:12px 0 16px;cursor:pointer;color:var(--a);font-size:14px}
+.detail-card{padding:20px}
+.detail-subject{font-size:18px;font-weight:600;margin-bottom:12px;line-height:1.4}
+.detail-meta{color:var(--t2);font-size:13px;margin-bottom:16px;line-height:1.6}
+.detail-meta span{color:var(--t);font-weight:500}
+.detail-body{font-size:14px;line-height:1.7;color:var(--t);word-break:break-word}
+.detail-body a{color:var(--a)}
+
+.form-card{padding:20px;margin-bottom:16px}
+.form-label{font-size:13px;color:var(--t2);margin-bottom:8px}
+.form-actions{display:flex;gap:8px;margin-top:12px}
+
+.status-bar{display:flex;align-items:center;gap:8px;padding:10px 16px;font-size:12px;color:var(--t3)}
+.spinner{width:14px;height:14px;border:2px solid rgba(255,255,255,.1);border-top-color:var(--a);border-radius:50%;animation:spin .8s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.empty{text-align:center;padding:60px 20px;color:var(--t3)}
+.empty-icon{font-size:48px;margin-bottom:12px;opacity:.5}
+.empty-text{font-size:15px}
+
+.toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);padding:10px 22px;border-radius:12px;font-size:14px;font-weight:500;z-index:999;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);animation:sd .3s cubic-bezier(.2,.8,.2,1);box-shadow:0 8px 32px rgba(0,0,0,.3)}
+.toast-ok{background:rgba(48,209,88,.9);color:#000}.toast-err{background:rgba(255,69,58,.9);color:#fff}
+@keyframes sd{from{opacity:0;transform:translateX(-50%) translateY(-16px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+
+mark{background:rgba(10,132,255,.3);color:#fff;padding:0 3px;border-radius:3px}
+
+/* 设置页 */
+.settings-item{padding:14px 16px;margin-bottom:8px}
+.settings-item label{display:block;font-size:12px;color:var(--t3);margin-bottom:6px}
+.settings-item input{margin-bottom:0}
+
+@media(max-width:600px){.wrap{padding:12px}.topbar h1{font-size:18px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ═══ 设置页（首次启动显示） ═══ -->
+  <div id="page-settings" class="page">
+    <div class="topbar">
+      <h1>⚙️ 连接设置</h1>
+    </div>
+    <div class="glass form-card">
+      <div class="form-label">填写远程服务器信息，连接到电脑端取件工具</div>
+      <div class="settings-item">
+        <label>API 地址（含端口）</label>
+        <input id="set-url" placeholder="http://192.168.x.x:8877 或 https://域名">
+      </div>
+      <div class="settings-item">
+        <label>API Token</label>
+        <input id="set-token" placeholder="从电脑端获取的Token">
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-g" onclick="saveSettings()">保存并连接</button>
+      </div>
+      <div style="margin-top:12px;font-size:12px;color:var(--t3)">
+        💡 Token 和地址在电脑端的服务配置中获取，不会上传到任何地方
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ 账号列表页 ═══ -->
+  <div id="page-list" class="page">
+    <div class="topbar">
+      <h1>📬 Outlook 取件</h1>
+      <span class="badge" id="cnt">0</span>
+      <button class="btn btn-ghost btn-sm" onclick="showForm()">＋ 添加</button>
+      <button class="btn btn-ghost btn-sm" onclick="checkUpdate()">🔄 检查更新</button>
+      <button class="btn btn-ghost btn-sm" onclick="go('settings')">⚙️</button>
+    </div>
+
+    <div id="add-form" class="glass form-card" style="display:none">
+      <div class="form-label">粘贴账号（JSON 或 ---- 格式均可）</div>
+      <textarea id="add-input" rows="4" placeholder='[{"type":"imap","email":"...","password":"..."}]'></textarea>
+      <div class="form-actions">
+        <button class="btn btn-g btn-sm" onclick="doAdd()">添加</button>
+        <button class="btn btn-ghost btn-sm" onclick="hideForm()">取消</button>
+        <button class="btn btn-ghost btn-sm" onclick="doImport()">导入JSON</button>
+        <button class="btn btn-ghost btn-sm" onclick="doExport()">导出</button>
+      </div>
+    </div>
+
+    <div class="search-bar">
+      <input id="acc-search" placeholder="搜索账号..." oninput="filterAccs()">
+    </div>
+    <div id="acc-list"></div>
+  </div>
+
+  <!-- ═══ 邮件列表页 ═══ -->
+  <div id="page-mail" class="page">
+    <div class="mail-topbar">
+      <button class="btn btn-ghost btn-sm" onclick="backToList()">← 返回</button>
+      <span class="account-name" id="mail-account"></span>
+      <button class="btn btn-a btn-sm" onclick="refreshMail()" id="btn-refresh">🔄 刷新</button>
+    </div>
+    <div class="glass" style="margin-bottom:12px">
+      <div style="padding:8px 12px"><input id="mail-search" placeholder="搜索邮件..." onkeydown="if(event.key==='Enter')refreshMail()"></div>
+    </div>
+    <div id="mail-status" class="glass status-bar" style="display:none"></div>
+    <div id="mail-list"></div>
+  </div>
+
+  <!-- ═══ 邮件详情页 ═══ -->
+  <div id="page-detail" class="page">
+    <div class="detail-back" onclick="backToMails()">← 返回收件箱</div>
+    <div class="glass detail-card">
+      <div class="detail-subject" id="d-subject"></div>
+      <div class="detail-meta" id="d-meta"></div>
+      <div id="d-actions" style="margin-bottom:12px;display:flex;gap:8px">
+        <button class="btn btn-ghost btn-sm" onclick="doTranslate()" id="btn-trans">🌐 翻译为中文</button>
+      </div>
+      <div id="d-trans" style="display:none;margin-bottom:16px;padding:14px;background:rgba(10,132,255,.08);border-left:3px solid var(--a);border-radius:0 var(--rs) var(--rs) 0;font-size:14px;line-height:1.7"></div>
+      <div class="detail-body" id="d-body"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let ACCS=[], CURRENT='', ALLMAILS='', API_URL='', API_TOKEN='';
+
+function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML}
+function toast(m,ok=true){const e=document.createElement('div');e.className='toast '+(ok?'toast-ok':'toast-err');e.textContent=m;document.body.appendChild(e);setTimeout(()=>e.remove(),2500)}
+
+function go(name){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+}
+
+// API 请求封装
+async function api(path, opts={}){
+  const sep = path.includes('?') ? '&' : '?';
+  const url = API_URL + path + (API_TOKEN ? sep+'token='+encodeURIComponent(API_TOKEN) : '');
+  const headers = {'Content-Type':'application/json'};
+  if(API_TOKEN) headers['Authorization'] = 'Bearer ' + API_TOKEN;
+  return fetch(url, {...opts, headers: {...headers, ...opts.headers}});
+}
+
+/* ── 设置 ── */
+function loadSettings(){
+  API_URL = localStorage.getItem('api_url') || '';
+  API_TOKEN = localStorage.getItem('api_token') || '';
+  if(!API_URL){
+    go('settings');
+  }else{
+    go('list');
+    loadAccs();
+  }
+}
+
+function saveSettings(){
+  const url = document.getElementById('set-url').value.trim().replace(/\/+$/,'');
+  const token = document.getElementById('set-token').value.trim();
+  if(!url){toast('请输入API地址',false);return}
+  API_URL = url;
+  API_TOKEN = token;
+  localStorage.setItem('api_url', url);
+  localStorage.setItem('api_token', token);
+  toast('保存成功');
+  go('list');
+  loadAccs();
+}
+
+/* ── 账号 ── */
+async function loadAccs(){
+  try{
+    const r = await api('/api/accounts');
+    if(!r.ok){toast('连接失败: '+r.status,false);return}
+    ACCS = await r.json();
+    renderAccs();
+  }catch(e){toast('连接失败: '+e.message,false)}
+}
+
+function renderAccs(){
+  document.getElementById('cnt').textContent=ACCS.length;
+  const q=document.getElementById('acc-search').value.toLowerCase();
+  const list=document.getElementById('acc-list');
+  const filtered=q?ACCS.filter(a=>a.email.toLowerCase().includes(q)):ACCS;
+  if(!filtered.length){
+    list.innerHTML='<div class="empty"><div class="empty-icon">📭</div><div class="empty-text">'+(ACCS.length?'没有匹配':'暂无账号，请点击右上角添加')+'</div></div>';
+    return;
+  }
+
+  // 按邮箱后缀分组
+  const groups={};
+  filtered.forEach(a=>{
+    const suffix=a.email.split('@')[1]||'other';
+    if(!groups[suffix])groups[suffix]=[];
+    groups[suffix].push(a);
+  });
+
+  // 排序：数量多的在前
+  const sorted=Object.entries(groups).sort((a,b)=>b[1].length-a[1].length);
+
+  let h='';
+  sorted.forEach(([suffix,accs])=>{
+    const gid='g-'+suffix.replace(/\./g,'-');
+    const collapsed=localStorage.getItem('collapsed_'+suffix)==='1';
+    h+='<div class="glass" style="margin-bottom:8px">';
+    h+='<div class="acc-group-header" onclick="toggleGroup(\''+suffix+'\')">';
+    h+='<span class="group-arrow" id="arrow-'+gid+'">'+(collapsed?'▶':'▼')+'</span>';
+    h+='<span class="group-name">'+esc(suffix)+'</span>';
+    h+='<span class="badge">'+accs.length+'</span>';
+    h+='</div>';
+    h+='<div id="body-'+gid+'" style="'+(collapsed?'display:none':'')+'">';
+    accs.forEach(a=>{
+      h+='<div class="acc-item">';
+      h+='<span class="dot"></span>';
+      h+='<span class="email" title="'+esc(a.email)+'">'+esc(a.email.split('@')[0])+'</span>';
+      h+='<button class="btn btn-ghost btn-sm" onclick="copyAcc(\''+esc(a.email)+'\')">复制</button>';
+      h+='<button class="btn btn-a btn-sm" onclick="openMail(\''+esc(a.email)+'\')">收件箱</button>';
+      h+='</div>';
+    });
+    h+='</div></div>';
+  });
+  list.innerHTML=h;
+}
+
+function toggleGroup(suffix){
+  const gid='g-'+suffix.replace(/\./g,'-');
+  const body=document.getElementById('body-'+gid);
+  const arrow=document.getElementById('arrow-'+gid);
+  const collapsed=body.style.display==='none';
+  body.style.display=collapsed?'':'none';
+  arrow.textContent=collapsed?'▼':'▶';
+  localStorage.setItem('collapsed_'+suffix, collapsed?'0':'1');
+}
+
+function filterAccs(){renderAccs()}
+
+function copyAcc(email){
+  navigator.clipboard.writeText(email).then(()=>toast('已复制邮箱')).catch(()=>{
+    const ta=document.createElement('textarea');ta.value=email;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);
+    toast('已复制');
+  });
+}
+
+function showForm(){document.getElementById('add-form').style.display='block'}
+function hideForm(){document.getElementById('add-form').style.display='none';document.getElementById('add-input').value=''}
+
+async function doAdd(){
+  const t=document.getElementById('add-input').value.trim();
+  if(!t)return;
+  const accs=[];
+  try{
+    const d=JSON.parse(t);
+    const arr=Array.isArray(d)?d:[d];
+    arr.forEach(a=>{if(a.email)accs.push(a)});
+  }catch(e){
+    t.split('\n').forEach(l=>{
+      const p=l.trim().split('----').map(s=>s.trim().replace('$$',''));
+      if(p.length>=4){
+        accs.push({email:p[0],password:p[1],client_id:p[2],refresh_token:p[3]});
+      }else if(p.length>=2){
+        accs.push({type:'imap',email:p[0],password:p[1],imap_server:p[2]||'imap.163.com',imap_port:993});
+      }
+    });
+  }
+  if(!accs.length){toast('格式不对',false);return}
+  try{
+    const r=await(await api('/api/accounts',{method:'POST',body:JSON.stringify(accs)})).json();
+    toast('添加了 '+r.added+' 个');
+  }catch(e){toast('添加失败',false)}
+  hideForm();loadAccs();
+}
+
+function doImport(){
+  const inp=document.createElement('input');inp.type='file';inp.accept='.json';
+  inp.onchange=async()=>{
+    const text=await inp.files[0].text();
+    try{
+      const d=JSON.parse(text);const arr=Array.isArray(d)?d:[d];
+      const r=await(await api('/api/accounts',{method:'POST',body:JSON.stringify(arr)})).json();
+      toast('导入了 '+r.added+' 个');loadAccs();
+    }catch(e){toast('JSON 格式错误',false)}
+  };
+  inp.click();
+}
+
+function doExport(){
+  const b=new Blob([JSON.stringify(ACCS,null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='outlook_accounts.json';a.click();toast('已导出');
+}
+
+/* ── 邮件 ── */
+function openMail(email){
+  CURRENT=email;
+  document.getElementById('mail-account').textContent=email;
+  document.getElementById('mail-search').value='';
+  ALLMAILS=[];
+  document.getElementById('mail-status').style.display='none';
+  go('mail');
+  loadCache();
+}
+
+async function loadCache(){
+  try{
+    const r=await(await api('/api/cache/'+encodeURIComponent(CURRENT))).json();
+    if(r.emails&&r.emails.length){
+      ALLMAILS=r.emails;
+      document.getElementById('mail-status').style.display='flex';
+      document.getElementById('mail-status').innerHTML='📦 已加载缓存 '+r.count+' 封 · 点击刷新获取新邮件';
+      renderMails('');
+    }else{
+      document.getElementById('mail-list').innerHTML='<div class="empty"><div class="empty-icon">🔄</div><div class="empty-text">暂无缓存，点击右上角「刷新」收取邮件</div></div>';
+    }
+  }catch(e){}
+}
+
+function backToList(){go('list')}
+
+async function refreshMail(){
+  if(!CURRENT)return;
+  const btn=document.getElementById('btn-refresh');
+  const status=document.getElementById('mail-status');
+  const q=document.getElementById('mail-search').value.trim();
+  btn.disabled=true;
+  status.style.display='flex';
+  status.innerHTML='<span class="spinner"></span> 正在拉取 '+esc(CURRENT)+' 的邮件…';
+
+  // 有缓存时只拉最新10封，首次拉100封
+  const topNum=ALLMAILS.length>0?10:100;
+
+  try{
+    let url='/api/mail/'+encodeURIComponent(CURRENT)+'?top='+topNum;
+    if(q)url+='&q='+encodeURIComponent(q);
+    const r=await(await api(url)).json();
+    if(r.error){
+      status.innerHTML='⚠ '+esc(r.error);
+      document.getElementById('mail-list').innerHTML='';
+    }else{
+      ALLMAILS=r.emails||[];
+      status.innerHTML='✅ '+ALLMAILS.length+' 封邮件'+(q?' · 搜索：'+esc(q):'');
+      renderMails(q);
+    }
+  }catch(e){
+    status.innerHTML='❌ 请求失败：'+e.message;
+  }
+  btn.disabled=false;
+}
+
+function renderMails(search){
+  const el=document.getElementById('mail-list');
+  if(!ALLMAILS.length){
+    el.innerHTML='<div class="empty"><div class="empty-icon">📭</div><div class="empty-text">没有邮件</div></div>';
+    return;
+  }
+  let h='';
+  ALLMAILS.forEach((m,i)=>{
+    const cls=m.is_read?'':' unread';
+    let subj=esc(m.subject);
+    if(search){const re=new RegExp('('+search.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+')','gi');subj=subj.replace(re,'<mark>$1</mark>')}
+    h+='<div class="mail-item'+cls+'" onclick="openDetail('+i+')">';
+    h+='<div class="mail-subject">'+subj+'</div>';
+    h+='<div class="mail-meta">';
+    h+='<span class="mail-from">'+esc(m.from_name||m.from)+'</span>';
+    h+='<span class="mail-time">'+(m.time?new Date(m.time).toLocaleString('zh-CN',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'}):'')+'</span>';
+    h+='</div>';
+    h+='<div class="mail-preview">'+esc(m.preview)+'</div>';
+    h+='</div>';
+  });
+  el.innerHTML=h;
+}
+
+/* ── 邮件详情 ── */
+function openDetail(i){
+  const m=ALLMAILS[i];if(!m)return;
+  document.getElementById('d-subject').textContent=m.subject;
+  document.getElementById('d-meta').innerHTML=
+    '发件人：<span>'+esc(m.from_name||m.from)+' &lt;'+esc(m.from)+'&gt;</span><br>'+
+    '时　间：<span>'+(m.time?new Date(m.time).toLocaleString('zh-CN'):'')+'</span><br>'+
+    '账　号：<span>'+esc(CURRENT)+'</span>';
+  const body=document.getElementById('d-body');
+  TRANS_ORIG=m.body_type==='html'?(m.body||'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim():(m.body||m.preview);
+  document.getElementById('d-trans').style.display='none';
+  document.getElementById('btn-trans').textContent='🌐 翻译为中文';
+  document.getElementById('btn-trans').disabled=false;
+  if(m.body_type==='html'){
+    body.innerHTML=m.body;
+    body.querySelectorAll('script,iframe,object,embed').forEach(e=>e.remove());
+  }else{
+    body.textContent=m.body||m.preview;
+  }
+  go('detail');
+}
+
+function backToMails(){go('mail')}
+
+/* ── 翻译 ── */
+let TRANS_ORIG='';
+async function doTranslate(){
+  const btn=document.getElementById('btn-trans');
+  const box=document.getElementById('d-trans');
+  if(box.style.display!=='none'){box.style.display='none';btn.textContent='🌐 翻译为中文';return}
+  if(!TRANS_ORIG)return;
+  btn.disabled=true;btn.textContent='翻译中…';
+  try{
+    const r=await(await api('/api/translate',{method:'POST',body:JSON.stringify({text:TRANS_ORIG})})).json();
+    if(r.translated){
+      box.innerHTML='<div style="color:var(--t3);font-size:12px;margin-bottom:8px">🌐 以下为机器翻译</div>'+esc(r.translated).replace(/\n/g,'<br>');
+      box.style.display='block';
+      btn.textContent='🌐 收起翻译';
+    }else{
+      toast('翻译失败'+(r.error?'：'+r.error:''),false);
+    }
+  }catch(e){toast('翻译请求失败',false)}
+  btn.disabled=false;
+}
+
+/* 启动 */
+loadSettings();
+
+/* ── 更新检查 ── */
+async function checkUpdate(){
+  try{
+    const r=await api('/api/version');
+    const d=await r.json();
+    const localVer=typeof Android!=='undefined'?Android.getVersionName():'2.1';
+    if(d.version!==localVer){
+      if(confirm('发现新版本 v'+d.version+'，当前 v'+localVer+'，是否下载更新？')){
+        window.open(d.apk_url,'_blank');
+      }
+    }else{
+      toast('已是最新版本 v'+localVer);
+    }
+  }catch(e){toast('检查更新失败',false)}
+}
+</script>
+</body>
+</html>

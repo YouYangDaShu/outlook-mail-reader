@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Outlook 取件工具 v5 — 支持 Graph API + IMAP 双协议"""
 
-import json, os, requests, hashlib, urllib.parse, imaplib, email, poplib
+import json, os, requests, hashlib, urllib.parse, imaplib, email, poplib, smtplib
 from email.header import decode_header
 from datetime import datetime
 from flask import Flask, Response, request, jsonify, send_from_directory
@@ -32,15 +32,19 @@ def check_token():
 
 @app.before_request
 def before_request():
-    # 如果设置了API_TOKEN，则只允许API接口访问，阻止网页访问
-    if API_TOKEN:
-        # 允许API接口和静态文件
-        if request.path.startswith("/api/") or request.path.startswith("/static/"):
+    # 判断是否本地访问：只看 Host，避免 frp/Caddy 反代从 127.0.0.1 转发导致公网被误判成本地
+    host = (request.host or '').split(':', 1)[0]
+    is_local = host in ('127.0.0.1', 'localhost', '::1')
+    
+    # 如果设置了API_TOKEN，且不是本地访问，则需要验证
+    if API_TOKEN and not is_local:
+        # API接口需要token
+        if request.path.startswith("/api/"):
             if not check_token():
                 return jsonify({"error": "未授权，请提供有效的API Token"}), 401
-        else:
-            # 阻止网页访问
-            return jsonify({"error": "禁止访问网页，请使用API接口"}), 403
+        # 非本地访问禁止看网页
+        elif not request.path.startswith("/static/"):
+            return jsonify({"error": "禁止访问，请使用API接口或本地访问"}), 403
 
 
 def cache_path(email_addr):
@@ -123,6 +127,8 @@ def fetch_pop3_emails(acc, top=20):
             default_server = "pop.yeah.net"
         elif "@sina.com" in email_addr:
             default_server = "pop.sina.com"
+        elif "@gmx" in email_addr:
+            default_server = "pop.gmx.com"
         elif "@yahoo" in email_addr:
             default_server = "pop.mail.yahoo.com"
         else:
@@ -175,6 +181,58 @@ def fetch_pop3_emails(acc, top=20):
         return emails
     except Exception as e:
         return [{"error": str(e)}]
+
+
+def smtp_server_for(email_addr):
+    email_addr = (email_addr or '').lower()
+    if '@qq.com' in email_addr:
+        return 'smtp.qq.com', 465
+    if '@126.com' in email_addr:
+        return 'smtp.126.com', 465
+    if '@yeah.net' in email_addr:
+        return 'smtp.yeah.net', 465
+    if '@sina.com' in email_addr:
+        return 'smtp.sina.com', 465
+    if '@gmx' in email_addr:
+        return 'smtp.gmx.com', 465
+    if '@yahoo' in email_addr:
+        return 'smtp.mail.yahoo.com', 465
+    return 'smtp.163.com', 465
+
+
+def check_pop3_account(acc):
+    server = acc.get('pop_server')
+    if not server:
+        email_addr = acc.get('email', '')
+        if '@qq.com' in email_addr:
+            server = 'pop.qq.com'
+        elif '@126.com' in email_addr:
+            server = 'pop.126.com'
+        elif '@yeah.net' in email_addr:
+            server = 'pop.yeah.net'
+        elif '@sina.com' in email_addr:
+            server = 'pop.sina.com'
+        elif '@gmx' in email_addr:
+            server = 'pop.gmx.com'
+        elif '@yahoo' in email_addr:
+            server = 'pop.mail.yahoo.com'
+        else:
+            server = 'pop.163.com'
+    port = int(acc.get('pop_port', 995))
+    pop = poplib.POP3_SSL(server, port, timeout=12)
+    pop.user(acc['email'])
+    pop.pass_(acc['password'])
+    count, _ = pop.stat()
+    pop.quit()
+    return count
+
+
+def check_smtp_account(acc):
+    server, port = smtp_server_for(acc.get('email', ''))
+    smtp = smtplib.SMTP_SSL(server, port, timeout=12)
+    smtp.login(acc['email'], acc['password'])
+    smtp.quit()
+    return True
 
 
 def fetch_imap_emails(acc, top=20, search=""):
@@ -269,7 +327,7 @@ def index():
 @app.route("/api/version")
 def get_version():
     # 版本号，每次更新APK时改这里
-    return jsonify({"version": "2.1", "apk_url": "https://qj.youyangai.top/static/Outlook取件.apk"})
+    return jsonify({"version": "2.2", "apk_url": "https://qj.youyangai.top/static/OutlookMailReader.apk"})
 
 
 @app.route("/static/<path:filename>")
@@ -320,6 +378,66 @@ def replace_accs():
     merged = [old[a["email"]] for a in request.json if a.get("email") in old]
     save_accs(merged)
     return jsonify({"ok": True, "total": len(merged)})
+
+
+@app.route("/api/accounts/<path:email_addr>", methods=["PATCH"])
+def update_acc(email_addr):
+    accs = load_accs()
+    patch_data = request.json or {}
+    updated = False
+    for a in accs:
+        if a.get("email") == email_addr:
+            for key in ("email", "type", "password", "client_id", "refresh_token", "imap_server", "imap_port", "pop_server", "pop_port"):
+                if key in patch_data:
+                    a[key] = patch_data[key]
+            updated = True
+            break
+    if not updated:
+        return jsonify({"error": "账号不存在"}), 404
+    save_accs(accs)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/accounts/<path:email_addr>", methods=["DELETE"])
+def delete_acc(email_addr):
+    accs = load_accs()
+    new_accs = [a for a in accs if a.get("email") != email_addr]
+    if len(new_accs) == len(accs):
+        return jsonify({"error": "账号不存在"}), 404
+    save_accs(new_accs)
+    cache_file = cache_path(email_addr)
+    if os.path.exists(cache_file):
+        os.remove(cache_file)
+    return jsonify({"ok": True, "total": len(new_accs)})
+
+
+@app.route("/api/accounts/<path:email_addr>/check")
+def check_acc(email_addr):
+    accs = load_accs()
+    acc = next((a for a in accs if a.get("email") == email_addr), None)
+    if not acc:
+        return jsonify({"ok": False, "status": "missing", "message": "账号不存在"}), 404
+    try:
+        if acc.get("type") == "imap":
+            count = check_pop3_account(acc)
+            smtp_ok = False
+            try:
+                smtp_ok = check_smtp_account(acc)
+            except Exception:
+                smtp_ok = False
+            return jsonify({"ok": True, "status": "ok", "message": f"收件正常，共 {count} 封" + ("，发件正常" if smtp_ok else "，发件未验证"), "count": count, "smtp": smtp_ok})
+        else:
+            tr = requests.post(TOKEN_URL, data={
+                "client_id": acc["client_id"],
+                "refresh_token": acc["refresh_token"],
+                "grant_type": "refresh_token",
+                "scope": SCOPE
+            }, timeout=15)
+            if tr.status_code == 200:
+                return jsonify({"ok": True, "status": "ok", "message": "Graph Token 正常"})
+            return jsonify({"ok": False, "status": "bad", "message": f"Token 刷新失败 {tr.status_code}"})
+    except Exception as e:
+        return jsonify({"ok": False, "status": "bad", "message": str(e)})
 
 
 @app.route("/api/mail/<path:email_addr>")

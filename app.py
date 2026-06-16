@@ -440,6 +440,41 @@ def check_acc(email_addr):
         return jsonify({"ok": False, "status": "bad", "message": str(e)})
 
 
+@app.route("/api/accounts/check-all")
+def check_all_accs():
+    accs = load_accs()
+    suffix = request.args.get("suffix", "")
+    if suffix:
+        accs = [a for a in accs if (a.get("email", "").split("@")[-1] == suffix)]
+    results = []
+    for acc in accs:
+        email_addr = acc.get("email", "")
+        try:
+            if acc.get("type") == "imap":
+                count = check_pop3_account(acc)
+                smtp_ok = False
+                try:
+                    smtp_ok = check_smtp_account(acc)
+                except Exception:
+                    smtp_ok = False
+                results.append({"email": email_addr, "ok": True, "status": "ok", "message": f"收件正常 {count} 封" + (" 发件OK" if smtp_ok else ""), "count": count, "smtp": smtp_ok})
+            else:
+                tr = requests.post(TOKEN_URL, data={
+                    "client_id": acc["client_id"],
+                    "refresh_token": acc["refresh_token"],
+                    "grant_type": "refresh_token",
+                    "scope": SCOPE
+                }, timeout=15)
+                if tr.status_code == 200:
+                    results.append({"email": email_addr, "ok": True, "status": "ok", "message": "Graph Token 正常"})
+                else:
+                    results.append({"email": email_addr, "ok": False, "status": "bad", "message": f"Token 刷新失败 {tr.status_code}"})
+        except Exception as e:
+            results.append({"email": email_addr, "ok": False, "status": "bad", "message": str(e)})
+    bad = [r for r in results if not r.get("ok")]
+    return jsonify({"ok": True, "total": len(results), "bad_count": len(bad), "results": results})
+
+
 @app.route("/api/mail/<path:email_addr>")
 def get_mail(email_addr):
     """拉取单个账号的邮件 — 支持 Graph 和 IMAP"""
